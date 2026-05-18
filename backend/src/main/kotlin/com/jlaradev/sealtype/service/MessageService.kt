@@ -20,7 +20,8 @@ class MessageService(
     private val messageRepository: MessageRepository,
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
-    private val chatMemberRepository: ChatMemberRepository
+    private val chatMemberRepository: ChatMemberRepository,
+    private val webSocketService: WebSocketService
 ) {
 
     fun sendMessage(request: MessageRequest, senderId: UUID): MessageResponse {
@@ -58,60 +59,65 @@ class MessageService(
         return messageRepository.findById(id).orElse(null)?.let { toResponse(it) }
     }
 
-    fun updateMessage(id: UUID, request: MessageRequest, userId: UUID): MessageResponse {
-        val message = messageRepository.findById(id).orElseThrow {
-            IllegalArgumentException("Mensaje no encontrado")
-        }
+     fun updateMessage(id: UUID, request: MessageRequest, userId: UUID): MessageResponse {
+         val message = messageRepository.findById(id).orElseThrow {
+             IllegalArgumentException("Mensaje no encontrado")
+         }
 
-        if (message.sender.id != userId) {
-            throw IllegalArgumentException("Solo el remitente puede editar el mensaje")
-        }
+         if (message.sender.id != userId) {
+             throw IllegalArgumentException("Solo el remitente puede editar el mensaje")
+         }
 
-        if (message.isDeleted) {
-            throw IllegalArgumentException("No se puede editar un mensaje eliminado")
-        }
+         if (message.isDeleted) {
+             throw IllegalArgumentException("No se puede editar un mensaje eliminado")
+         }
 
-        val updatedMessage = Message(
-            id = message.id,
-            chat = message.chat,
-            sender = message.sender,
-            content = request.content,
-            type = message.type,
-            isDeleted = message.isDeleted,
-            deletedAt = message.deletedAt,
-            attachment = message.attachment,
-            createdAt = message.createdAt,
-            updatedAt = LocalDateTime.now()
-        )
+         val updatedMessage = Message(
+             id = message.id,
+             chat = message.chat,
+             sender = message.sender,
+             content = request.content,
+             type = message.type,
+             isDeleted = message.isDeleted,
+             deletedAt = message.deletedAt,
+             attachment = message.attachment,
+             createdAt = message.createdAt,
+             updatedAt = LocalDateTime.now()
+         )
 
-        val savedMessage = messageRepository.save(updatedMessage)
-        return toResponse(savedMessage)
-    }
+         val savedMessage = messageRepository.save(updatedMessage)
 
-    fun deleteMessage(id: UUID, userId: UUID): Unit {
-        val message = messageRepository.findById(id).orElseThrow {
-            IllegalArgumentException("Mensaje no encontrado")
-        }
+         webSocketService.broadcastMessageEdited(savedMessage.id, savedMessage.content, message.chat.id)
 
-        if (message.sender.id != userId) {
-            throw IllegalArgumentException("Solo el remitente puede eliminar el mensaje")
-        }
+         return toResponse(savedMessage)
+     }
 
-        val deletedMessage = Message(
-            id = message.id,
-            chat = message.chat,
-            sender = message.sender,
-            content = message.content,
-            type = message.type,
-            isDeleted = true,
-            deletedAt = LocalDateTime.now(),
-            attachment = message.attachment,
-            createdAt = message.createdAt,
-            updatedAt = LocalDateTime.now()
-        )
+     fun deleteMessage(id: UUID, userId: UUID): Unit {
+         val message = messageRepository.findById(id).orElseThrow {
+             IllegalArgumentException("Mensaje no encontrado")
+         }
 
-        messageRepository.save(deletedMessage)
-    }
+         if (message.sender.id != userId) {
+             throw IllegalArgumentException("Solo el remitente puede eliminar el mensaje")
+         }
+
+         val deletedMessage = Message(
+             id = message.id,
+             chat = message.chat,
+             sender = message.sender,
+             content = message.content,
+             type = message.type,
+             isDeleted = true,
+             deletedAt = LocalDateTime.now(),
+             attachment = message.attachment,
+             createdAt = message.createdAt,
+             updatedAt = LocalDateTime.now()
+         )
+
+         messageRepository.save(deletedMessage)
+
+         webSocketService.broadcastMessageDeleted(id, message.chat.id)
+     }
 
     fun getMessagesByChat(chatId: UUID, pageable: Pageable): Page<MessageResponse> {
         val chat = chatRepository.findById(chatId).orElseThrow {
@@ -145,4 +151,3 @@ class MessageService(
         )
     }
 }
-

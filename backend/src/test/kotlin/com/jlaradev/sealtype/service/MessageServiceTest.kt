@@ -28,6 +28,7 @@ class MessageServiceTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var userRepository: UserRepository
     private lateinit var chatMemberRepository: ChatMemberRepository
+    private lateinit var webSocketService: WebSocketService
     private lateinit var messageService: MessageService
 
     private lateinit var testUser: User
@@ -43,7 +44,10 @@ class MessageServiceTest {
         chatRepository = mockk()
         userRepository = mockk()
         chatMemberRepository = mockk()
-        messageService = MessageService(messageRepository, chatRepository, userRepository, chatMemberRepository)
+
+        webSocketService = mockk(relaxed = true)
+
+        messageService = MessageService(messageRepository, chatRepository, userRepository, chatMemberRepository, webSocketService)
 
         testUser = User(
             id = testUserId,
